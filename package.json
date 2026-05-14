@@ -1,0 +1,109 @@
+{
+  "name": "growthlens-campaign-analyzer",
+  "version": "1.0.0",
+  "description": "GrowthLens Campaign Analyzer desktop app for local-first campaign performance intelligence.",
+  "main": "dist-electron/main/main.js",
+  "author": {
+    "name": "GrowthLens AI",
+    "email": "support@growthlens.ai"
+  },
+  "homepage": "https://growthlens.ai",
+  "license": "MIT",
+  "scripts": {
+    "clean": "node -e \"const fs=require('node:fs');for (const dir of ['dist','dist-electron']) fs.rmSync(dir,{recursive:true,force:true})\"",
+    "prebuild": "npm run clean",
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 dist-electron/main/main.js && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "tsc -p tsconfig.electron.json && tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && electron-builder",
+    "lint": "tsc --noEmit",
+    "rebuild:electron": "npm rebuild better-sqlite3 --runtime=electron --target=33.4.11 --dist-url=https://electronjs.org/headers",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@e965/xlsx": "^0.20.3",
+    "better-sqlite3": "^11.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "openai": "^4.77.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.15.0",
+    "tailwind-merge": "^2.5.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/papaparse": "^5.3.15",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.growthlens.campaign",
+    "productName": "GrowthLens Campaign Analyzer",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "icon": "build/icon.png",
+    "linux": {
+      "icon": "build/icon.png",
+      "maintainer": "GrowthLens AI <support@growthlens.ai>",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

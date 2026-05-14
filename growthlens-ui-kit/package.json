@@ -1,0 +1,14 @@
+{
+  "name": "growthlens-ui-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable GrowthLens AI brand and React/Tailwind UI kit.",
+  "main": "src/index.ts",
+  "peerDependencies": {
+    "react": "^18.3.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
