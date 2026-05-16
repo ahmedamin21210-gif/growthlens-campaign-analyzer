@@ -66,10 +66,11 @@ export function validateSettings(input: unknown, secureStorageAvailable = true):
   const issues: ValidationIssue[] = [];
   const targets = validateTargets(record.targets, issues);
   const brandingRecord = asRecord(record.branding);
-  const aiProvider = ["openai", "anthropic", "disabled"].includes(String(record.aiProvider)) ? (record.aiProvider as AppSettings["aiProvider"]) : "disabled";
+  const aiProvider = ["openai", "anthropic", "google", "ollama", "disabled"].includes(String(record.aiProvider)) ? (record.aiProvider as AppSettings["aiProvider"]) : "disabled";
   const apiKey = typeof record.apiKey === "string" && record.apiKey.trim() ? record.apiKey.trim() : undefined;
+  const localAiBaseUrl = cleanUrl(record.localAiBaseUrl) || defaultSettings.localAiBaseUrl;
 
-  if (apiKey && !secureStorageAvailable) {
+  if (apiKey && aiProvider !== "ollama" && !secureStorageAvailable) {
     issues.push({
       field: "apiKey",
       message: "Secure key storage is unavailable on this system. Use an environment variable or disable AI."
@@ -80,9 +81,10 @@ export function validateSettings(input: unknown, secureStorageAvailable = true):
 
   return {
     aiProvider,
-    apiKey,
+    apiKey: aiProvider === "ollama" ? undefined : apiKey,
     hasStoredApiKey: Boolean(record.hasStoredApiKey),
-    model: cleanText(record.model, 120) || (aiProvider === "anthropic" ? "claude-3-5-haiku-latest" : "gpt-4o-mini"),
+    model: cleanText(record.model, 120) || defaultModelForProvider(aiProvider),
+    localAiBaseUrl,
     targets,
     branding: {
       companyName: cleanText(brandingRecord.companyName, 120) || "GrowthLens AI",
@@ -97,6 +99,24 @@ export function validateSettings(input: unknown, secureStorageAvailable = true):
     defaultAttributionField: cleanText(record.defaultAttributionField, 80) || "conversions",
     allowDetailedAiData: Boolean(record.allowDetailedAiData)
   };
+}
+
+function defaultModelForProvider(provider: AppSettings["aiProvider"]): string {
+  if (provider === "anthropic") return "claude-3-5-haiku-latest";
+  if (provider === "google") return "gemini-1.5-flash";
+  if (provider === "ollama") return "llama3.1";
+  return "gpt-4o-mini";
+}
+
+function cleanUrl(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value.trim());
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
 }
 
 export function validatePdfExportPayload(input: unknown): PdfExportPayload {

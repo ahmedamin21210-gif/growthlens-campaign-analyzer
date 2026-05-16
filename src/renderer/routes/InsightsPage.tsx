@@ -24,7 +24,7 @@ export function InsightsPage() {
   }
   const chatDisabledReason =
     settings.aiProvider === "disabled"
-      ? "AI Analyst Chat is disabled for privacy-first V1. Enable OpenAI or Anthropic in Settings to chat with this analysis."
+      ? "AI Analyst Chat is disabled for privacy-first V1. Enable OpenAI, Anthropic, Google Gemini, or Ollama in Settings to chat with this analysis."
       : !settings.hasStoredApiKey
         ? "Add an API key in Settings to use AI Analyst Chat. Deterministic Action Plan items remain available below."
         : undefined;

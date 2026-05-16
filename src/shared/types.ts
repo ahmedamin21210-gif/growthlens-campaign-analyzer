@@ -262,10 +262,11 @@ export type BrandingSettings = {
 };
 
 export type AppSettings = {
-  aiProvider: "openai" | "anthropic" | "disabled";
+  aiProvider: "openai" | "anthropic" | "google" | "ollama" | "disabled";
   apiKey?: string;
   hasStoredApiKey?: boolean;
   model: string;
+  localAiBaseUrl?: string;
   targets: MarketingTargets;
   branding: BrandingSettings;
   defaultCurrency: string;
@@ -365,6 +366,7 @@ export const defaultTargets: MarketingTargets = {
 export const defaultSettings: AppSettings = {
   aiProvider: "disabled",
   model: "gpt-4o-mini",
+  localAiBaseUrl: "http://127.0.0.1:11434",
   targets: defaultTargets,
   branding: {
     companyName: "GrowthLens AI",

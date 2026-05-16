@@ -18,7 +18,7 @@ This repository is for **GrowthLens Campaign Analyzer only**. GrowthLens Competi
 - Growth Score and campaign health classification
 - Leak Detector for wasted spend and weak campaign performance
 - Rule-based Action Plan recommendations
-- Optional AI Decision Panel using OpenAI or Anthropic
+- Optional AI Decision Panel using OpenAI, Anthropic, Google Gemini, or local Ollama
 - Optional AI Analyst Chat grounded in the current workspace analysis
 - Branded Executive Brief PDF export
 - Local SQLite workspace save/load
@@ -35,7 +35,7 @@ This repository is for **GrowthLens Campaign Analyzer only**. GrowthLens Competi
 - PapaParse
 - `@e965/xlsx`
 - SQLite via `better-sqlite3`
-- OpenAI and Anthropic SDKs
+- OpenAI, Anthropic, Google Gemini REST, and local Ollama support
 - Electron Builder
 - Vitest
 
@@ -83,13 +83,30 @@ Linux AppImage/deb packaging is configured. macOS and Windows targets are presen
 
 AI is optional and disabled by default. The deterministic KPI engine, Growth Scores, Leak Detector, Action Plan, save/load, and PDF export work without an AI key.
 
-You can configure an API key in Settings. The Electron main process stores keys with `safeStorage` when available and never exposes keys to renderer logs.
+You can configure an API key in Settings for OpenAI, Anthropic, or Google Gemini. The Electron main process stores keys with `safeStorage` when available and never exposes keys to renderer logs. Ollama runs locally and does not require an API key.
 
 Environment-variable fallback is also supported:
 
 ```bash
 OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
+GOOGLE_API_KEY=...
+GEMINI_API_KEY=...
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+```
+
+Supported provider defaults:
+
+- OpenAI: `gpt-4o-mini`
+- Anthropic: `claude-3-5-haiku-latest`
+- Google Gemini: `gemini-1.5-flash`
+- Ollama: `llama3.1` at `http://127.0.0.1:11434`
+
+For Ollama, install Ollama, pull a model, and keep the server running:
+
+```bash
+ollama pull llama3.1
+ollama serve
 ```
 
 By default, only summarized campaign metrics are sent to the selected AI provider: overall KPIs, targets, top/worst campaigns, campaign summaries, deterministic recommendations, trend summary, and Leak Detector findings. Raw cleaned rows are not sent unless **Allow detailed AI data** is explicitly enabled in Settings.
@@ -151,6 +168,13 @@ release/
 
 Artifacts are named for **GrowthLens Campaign Analyzer**. The configured Linux targets are AppImage and deb.
 
+To build Windows from Linux with Wine/NSIS installed:
+
+```bash
+npm run build
+npx electron-builder --win --x64
+```
+
 ## Known Limits
 
 - Files larger than 25 MB are blocked in the desktop file picker path.
@@ -163,7 +187,8 @@ Artifacts are named for **GrowthLens Campaign Analyzer**. The configured Linux t
 ## Troubleshooting
 
 - If uploads fail, confirm the file is CSV, XLSX, or XLS and under 25 MB.
-- If AI fails, verify the selected provider, API key, model name, and internet connection in Settings.
+- If cloud AI fails, verify the selected provider, API key, model name, and internet connection in Settings.
+- If Ollama fails, confirm Ollama is running, the model is pulled, and the server URL matches Settings.
 - If PDF export fails, try another save folder and check Diagnostics for the local log path.
 - If SQLite native bindings fail in development, run `npm run rebuild:electron`.
 

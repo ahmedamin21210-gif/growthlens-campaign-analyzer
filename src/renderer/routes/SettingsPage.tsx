@@ -20,6 +20,8 @@ export function SettingsPage() {
     }));
   }
 
+  const isLocalAi = draft.aiProvider === "ollama";
+
   return (
     <div className="grid gap-6">
       <Card>
@@ -33,19 +35,36 @@ export function SettingsPage() {
               <option value="disabled">Disabled</option>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic Claude</option>
+              <option value="google">Google Gemini</option>
+              <option value="ollama">Local AI (Ollama)</option>
             </Select>
           </Field>
           <Field label="Model">
-            <Input value={draft.model} onChange={(event) => setDraft((current) => ({ ...current, model: event.target.value }))} />
+            <Input
+              value={draft.model}
+              placeholder={isLocalAi ? "llama3.1, mistral, qwen2.5..." : "Provider model name"}
+              onChange={(event) => setDraft((current) => ({ ...current, model: event.target.value }))}
+            />
           </Field>
-          <Field label="API key">
+          <Field label={isLocalAi ? "API key not required" : "API key"}>
             <Input
               type="password"
-              placeholder={settings.hasStoredApiKey ? "Saved key is stored securely" : "Paste API key"}
-              value={draft.apiKey ?? ""}
+              disabled={isLocalAi || draft.aiProvider === "disabled"}
+              placeholder={isLocalAi ? "Ollama runs locally" : settings.hasStoredApiKey ? "Saved key is stored securely" : "Paste API key"}
+              value={isLocalAi ? "" : draft.apiKey ?? ""}
               onChange={(event) => setDraft((current) => ({ ...current, apiKey: event.target.value }))}
             />
           </Field>
+          {isLocalAi ? (
+            <div className="col-span-3">
+              <Field label="Ollama server URL">
+                <Input
+                  value={draft.localAiBaseUrl ?? "http://127.0.0.1:11434"}
+                  onChange={(event) => setDraft((current) => ({ ...current, localAiBaseUrl: event.target.value }))}
+                />
+              </Field>
+            </div>
+          ) : null}
           <label className="col-span-3 flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
@@ -68,7 +87,7 @@ export function SettingsPage() {
             {testResult ? <span className="text-sm text-slate-600">{testResult}</span> : null}
           </div>
           <p className="col-span-3 rounded-xl border border-brand-border bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-            AI is optional. When enabled, GrowthLens sends summarized KPI metrics and detected issues only, not raw unnecessary campaign rows.
+            AI is optional. OpenAI, Anthropic, and Google use secure API keys. Ollama runs against your local server. GrowthLens sends summarized KPI metrics and detected issues only, not raw unnecessary campaign rows.
           </p>
         </CardContent>
       </Card>

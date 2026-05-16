@@ -35,6 +35,7 @@ type SettingsRow = {
   date_format: string;
   default_attribution_field: string;
   allow_detailed_ai_data: number;
+  local_ai_base_url?: string;
 };
 
 type ChatSessionRow = {
@@ -201,6 +202,7 @@ export class AppDatabase {
       aiProvider: row.ai_provider,
       apiKey: encryptedApiKey,
       model: row.model,
+      localAiBaseUrl: row.local_ai_base_url || defaultSettings.localAiBaseUrl,
       targets: JSON.parse(row.default_targets_json),
       branding: JSON.parse(row.branding_json),
       defaultCurrency: row.default_currency,
@@ -220,8 +222,8 @@ export class AppDatabase {
       .prepare(
         `INSERT INTO settings (
           id, ai_provider, api_key_encrypted, model, default_targets_json, branding_json,
-          default_currency, date_format, default_attribution_field, allow_detailed_ai_data
-        ) VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          default_currency, date_format, default_attribution_field, allow_detailed_ai_data, local_ai_base_url
+        ) VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           ai_provider = excluded.ai_provider,
           api_key_encrypted = excluded.api_key_encrypted,
@@ -231,7 +233,8 @@ export class AppDatabase {
           default_currency = excluded.default_currency,
           date_format = excluded.date_format,
           default_attribution_field = excluded.default_attribution_field,
-          allow_detailed_ai_data = excluded.allow_detailed_ai_data`
+          allow_detailed_ai_data = excluded.allow_detailed_ai_data,
+          local_ai_base_url = excluded.local_ai_base_url`
       )
       .run(
         settings.aiProvider,
@@ -242,7 +245,8 @@ export class AppDatabase {
         settings.defaultCurrency,
         settings.dateFormat,
         settings.defaultAttributionField,
-        settings.allowDetailedAiData ? 1 : 0
+        settings.allowDetailedAiData ? 1 : 0,
+        settings.localAiBaseUrl ?? defaultSettings.localAiBaseUrl
       );
     return settings;
   }

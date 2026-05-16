@@ -241,7 +241,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         return false;
       }
       if (settings.aiProvider === "disabled" || !settings.hasStoredApiKey) {
-        setError("Enable OpenAI or Anthropic and save an API key in Settings to use AI Analyst Chat.");
+        setError("Enable OpenAI, Anthropic, Google Gemini, or Ollama in Settings to use AI Analyst Chat.");
         return false;
       }
       try {

@@ -88,7 +88,19 @@ function decryptApiKey(value?: string): string | undefined {
 function getEnvironmentApiKey(provider: AppSettings["aiProvider"]): string | undefined {
   if (provider === "openai") return process.env.OPENAI_API_KEY;
   if (provider === "anthropic") return process.env.ANTHROPIC_API_KEY;
+  if (provider === "google") return process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY;
   return undefined;
+}
+
+function providerRequiresApiKey(provider: AppSettings["aiProvider"]): boolean {
+  return provider === "openai" || provider === "anthropic" || provider === "google";
+}
+
+function defaultModel(provider: AppSettings["aiProvider"]): string {
+  if (provider === "anthropic") return "claude-3-5-haiku-latest";
+  if (provider === "google") return "gemini-1.5-flash";
+  if (provider === "ollama") return "llama3.1";
+  return "gpt-4o-mini";
 }
 
 function getSettingsWithKey(): AppSettings {
@@ -96,12 +108,16 @@ function getSettingsWithKey(): AppSettings {
   const stored = decryptApiKey(database.getEncryptedApiKey());
   const envKey = getEnvironmentApiKey(base.aiProvider);
   const apiKey = stored ?? envKey;
-  return { ...base, apiKey, hasStoredApiKey: Boolean(stored) };
+  return { ...base, apiKey, localAiBaseUrl: base.localAiBaseUrl || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434", hasStoredApiKey: Boolean(stored) };
 }
 
 function getSettingsForRenderer(): AppSettings {
   const settings = getSettingsWithKey();
-  return { ...settings, apiKey: undefined, hasStoredApiKey: Boolean(settings.hasStoredApiKey || getEnvironmentApiKey(settings.aiProvider)) };
+  return {
+    ...settings,
+    apiKey: undefined,
+    hasStoredApiKey: settings.aiProvider === "ollama" || Boolean(settings.hasStoredApiKey || getEnvironmentApiKey(settings.aiProvider))
+  };
 }
 
 function friendlyError(error: unknown): string {
@@ -120,6 +136,50 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+async function callGoogleText(settings: AppSettings, apiKey: string, prompt: string, system?: string, jsonMode = false): Promise<string> {
+  const model = settings.model || defaultModel("google");
+  const response = await withTimeout(
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: jsonMode ? "application/json" : "text/plain"
+        },
+        contents: [{ role: "user", parts: [{ text: prompt }] }]
+      })
+    }),
+    30_000,
+    "Google Gemini"
+  );
+  if (!response.ok) throw new Error(`Google Gemini returned HTTP ${response.status}`);
+  const json = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  return json.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n").trim() ?? "";
+}
+
+async function callOllamaText(settings: AppSettings, messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, label: string): Promise<string> {
+  const baseUrl = (settings.localAiBaseUrl || "http://127.0.0.1:11434").replace(/\/$/, "");
+  const response = await withTimeout(
+    fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: settings.model || defaultModel("ollama"),
+        stream: false,
+        messages,
+        options: { temperature: 0.2 }
+      })
+    }),
+    45_000,
+    label
+  );
+  if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}. Make sure Ollama is running at ${baseUrl}.`);
+  const json = (await response.json()) as { message?: { content?: string }; response?: string };
+  return (json.message?.content ?? json.response ?? "").trim();
 }
 
 function parseCampaignFileFromPath(filePath: string): ParsedCampaignFile {
@@ -166,7 +226,7 @@ async function generateAiInsights(payload: AIInsightPayload): Promise<ProjectPay
     allowDetailedAiData: settings.allowDetailedAiData && Boolean(validated.allowDetailedAiData)
   };
   if (settings.aiProvider === "disabled") return fallbackInsightsV1(validated.analysis);
-  if (!settings.apiKey) {
+  if (providerRequiresApiKey(settings.aiProvider) && !settings.apiKey) {
     return {
       ...fallbackInsightsV1(validated.analysis),
       executive_summary: "AI is not configured, so this Decision Panel uses deterministic GrowthLens rule-based analysis."
@@ -179,7 +239,7 @@ async function generateAiInsights(payload: AIInsightPayload): Promise<ProjectPay
       const client = new OpenAI({ apiKey: settings.apiKey });
       const response = await withTimeout(
         client.chat.completions.create({
-          model: settings.model || "gpt-4o-mini",
+          model: settings.model || defaultModel("openai"),
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
@@ -194,7 +254,36 @@ async function generateAiInsights(payload: AIInsightPayload): Promise<ProjectPay
         ...parseAIResponseV1(response.choices[0]?.message?.content ?? "{}"),
         generated_at: new Date().toISOString(),
         provider: "openai",
-        model: settings.model || "gpt-4o-mini",
+        model: settings.model || defaultModel("openai"),
+        fallback: false
+      };
+    }
+
+    if (settings.aiProvider === "google") {
+      const text = await callGoogleText(settings, settings.apiKey ?? "", prompt, "Return valid JSON. Only use the provided campaign metrics.", true);
+      return {
+        ...parseAIResponseV1(text),
+        generated_at: new Date().toISOString(),
+        provider: "google",
+        model: settings.model || defaultModel("google"),
+        fallback: false
+      };
+    }
+
+    if (settings.aiProvider === "ollama") {
+      const text = await callOllamaText(
+        settings,
+        [
+          { role: "system", content: "Return valid JSON. Only use the provided campaign metrics." },
+          { role: "user", content: prompt }
+        ],
+        "Ollama Decision Panel"
+      );
+      return {
+        ...parseAIResponseV1(text),
+        generated_at: new Date().toISOString(),
+        provider: "ollama",
+        model: settings.model || defaultModel("ollama"),
         fallback: false
       };
     }
@@ -202,7 +291,7 @@ async function generateAiInsights(payload: AIInsightPayload): Promise<ProjectPay
     const client = new Anthropic({ apiKey: settings.apiKey });
     const response = await withTimeout(
       client.messages.create({
-        model: settings.model || "claude-3-5-haiku-latest",
+        model: settings.model || defaultModel("anthropic"),
         max_tokens: 2000,
         temperature: 0.2,
         system: "Return valid JSON. Only use the provided campaign metrics.",
@@ -216,7 +305,7 @@ async function generateAiInsights(payload: AIInsightPayload): Promise<ProjectPay
       ...parseAIResponseV1(text),
       generated_at: new Date().toISOString(),
       provider: "anthropic",
-      model: settings.model || "claude-3-5-haiku-latest",
+      model: settings.model || defaultModel("anthropic"),
       fallback: false
     };
   } catch (error) {
@@ -231,9 +320,9 @@ async function generateAiInsights(payload: AIInsightPayload): Promise<ProjectPay
 async function sendAiChatMessage(payload: AIChatRequest): Promise<AIChatResponse> {
   const validated = validateAiChatRequest(payload);
   const settings = getSettingsWithKey();
-  if (settings.aiProvider === "disabled" || !settings.apiKey) {
+  if (settings.aiProvider === "disabled" || (providerRequiresApiKey(settings.aiProvider) && !settings.apiKey)) {
     throw appError("AI_NOT_CONFIGURED", "AI Analyst Chat is not configured.", {
-      suggestedAction: "Choose OpenAI or Anthropic in Settings and save an API key to enable chat."
+      suggestedAction: "Choose OpenAI, Anthropic, Google, or Ollama in Settings and configure the required connection."
     });
   }
 
@@ -252,7 +341,7 @@ async function sendAiChatMessage(payload: AIChatRequest): Promise<AIChatResponse
       const client = new OpenAI({ apiKey: settings.apiKey });
       const response = await withTimeout(
         client.chat.completions.create({
-          model: settings.model || "gpt-4o-mini",
+          model: settings.model || defaultModel("openai"),
           temperature: 0.2,
           messages: [
             { role: "system", content: prompt.system },
@@ -264,11 +353,23 @@ async function sendAiChatMessage(payload: AIChatRequest): Promise<AIChatResponse
         "OpenAI Analyst Chat"
       );
       answer = response.choices[0]?.message?.content?.trim() ?? "";
+    } else if (settings.aiProvider === "google") {
+      answer = await callGoogleText(settings, settings.apiKey ?? "", prompt.user, prompt.system, false);
+    } else if (settings.aiProvider === "ollama") {
+      answer = await callOllamaText(
+        settings,
+        [
+          { role: "system", content: prompt.system },
+          ...(existingSession?.messages.slice(-8).map((message) => ({ role: message.role as "user" | "assistant", content: message.content })) ?? []),
+          { role: "user", content: prompt.user }
+        ],
+        "Ollama Analyst Chat"
+      );
     } else {
       const client = new Anthropic({ apiKey: settings.apiKey });
       const response = await withTimeout(
         client.messages.create({
-          model: settings.model || "claude-3-5-haiku-latest",
+          model: settings.model || defaultModel("anthropic"),
           max_tokens: 1600,
           temperature: 0.2,
           system: prompt.system,
@@ -300,7 +401,7 @@ async function sendAiChatMessage(payload: AIChatRequest): Promise<AIChatResponse
       session,
       answer,
       provider: settings.aiProvider,
-      model: settings.model
+      model: settings.model || defaultModel(settings.aiProvider)
     };
   } catch (error) {
     logEvent("ai.chat_failed", { error: friendlyError(error) });
@@ -354,7 +455,7 @@ function diagnostics() {
     dataDirectory: app.getPath("userData"),
     logFile: logPath,
     secureStorageAvailable: safeStorage.isEncryptionAvailable(),
-    aiConfigured: Boolean(settings.aiProvider !== "disabled" && settings.apiKey)
+    aiConfigured: settings.aiProvider === "ollama" || Boolean(settings.aiProvider !== "disabled" && settings.apiKey)
   };
 }
 
@@ -397,11 +498,15 @@ function registerIpc(): void {
     const validated = validateSettings(settings, safeStorage.isEncryptionAvailable());
     const apiKey = validated.apiKey ?? getSettingsWithKey().apiKey;
     if (validated.aiProvider === "disabled") return { ok: true, message: "AI is disabled. Rule-based Decision Panel output is available." };
-    if (!apiKey) return { ok: false, message: "Add an API key before testing the AI connection." };
+    if (providerRequiresApiKey(validated.aiProvider) && !apiKey) return { ok: false, message: "Add an API key before testing the AI connection." };
     try {
       if (validated.aiProvider === "openai") {
         const client = new OpenAI({ apiKey });
         await withTimeout(client.models.list(), 15_000, "OpenAI connection test");
+      } else if (validated.aiProvider === "google") {
+        await callGoogleText(validated, apiKey ?? "", "Return {\"ok\":true}", "Return JSON only.", true);
+      } else if (validated.aiProvider === "ollama") {
+        await callOllamaText(validated, [{ role: "user", content: "Reply with OK only." }], "Ollama connection test");
       } else {
         const client = new Anthropic({ apiKey });
         await withTimeout(

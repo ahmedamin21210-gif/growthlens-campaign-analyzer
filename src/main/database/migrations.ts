@@ -81,4 +81,8 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_project_updated ON ai_chat_sessions(project_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session_created ON ai_chat_messages(session_id, created_at ASC);
   `);
+  const settingsColumns = db.prepare("PRAGMA table_info(settings)").all() as Array<{ name: string }>;
+  if (!settingsColumns.some((column) => column.name === "local_ai_base_url")) {
+    db.prepare("ALTER TABLE settings ADD COLUMN local_ai_base_url TEXT").run();
+  }
 }
