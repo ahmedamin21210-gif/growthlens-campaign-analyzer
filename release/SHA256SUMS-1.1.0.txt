@@ -1,0 +1,4 @@
+3ef700f7ec50d6353d3bc957b9b0fdc1e72c9a0566de1aff3be101f06fb529bd  GrowthLens Campaign Analyzer-1.1.0.AppImage
+1ef882411734224c3f0cc9796bfca5ca535dc9ccf174feddf1bd097a9833daf5  growthlens-campaign-analyzer_1.1.0_amd64.deb
+d3443c9a10c061a9c38b4839b0610deff91b411490e42a504f60cfee0c7cdcaa  GrowthLens Campaign Analyzer-1.1.0-x64.exe
+ac566151b4eb3bd77d4333cfeee80db7a71ae1bab34adf4cc088f950d8738ee7  GrowthLens Campaign Analyzer-1.1.0-x64.exe.blockmap
